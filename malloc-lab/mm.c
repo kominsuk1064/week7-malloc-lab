@@ -81,6 +81,37 @@ static void *extend_heap(size_t words)
     return coalesce(bp);        // 새 free block 만들기, 필요하면 앞쪽 free block과 합치기, 최종 free block 포인터 반환
 }
 
+static void *coalesce(void *bp)
+{
+    size_t prev_alloc = GET_ALLOC(FTRP(PREV_BLKP(bp)));     // 이전 block footer에서 alloc 상태 확인
+    size_t next_alloc = GET_ALLOC(HDRP(NEXT_BLKP(bp)));     // 다음 block header에서 alloc 상태 확인
+    size_t size = GET_SIZE(HDRP(bp));       // 현재 free block의 전체 크기를 읽어서 size에 저장
+
+    if (prev_alloc && next_alloc) {             // 앞 alloc, 뒤 alloc
+        return bp;
+    }
+    else if (prev_alloc && !next_alloc) {       // 앞 alloc, 뒤 free
+        size += GET_SIZE(HDRP(NEXT_BLKP(bp)));      // 다음 block size를 현재 size에 더하기
+        PUT(HDRP(bp), PACK(size, 0));               // 합쳐진 큰 block의 header를 현재 block 위치에 기록
+        PUT(FTRP(bp), PACK(size, 0));               // 합쳐진 큰 block의 footer를 새 끝 위치에 기록
+    }
+    else if (!prev_alloc && next_alloc) {       // 앞 free, 뒤 alloc
+        size += GET_SIZE(HDRP(PREV_BLKP(bp)));      // 이전 block size를 더함
+        PUT(FTRP(bp), PACK(size, 0));               // 합쳐진 큰 block의 footer는 현재 block 끝 쪽에 생김
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));    // 합쳐진 큰 block의 header는 이전 block 자리에서 시작
+        bp = PREV_BLKP(bp);                         // 최종 free block 시작점은 이전 block 이므로 bp를 옮김
+    }
+    else {                                      // 앞 free, 뒤 free
+        size += GET_SIZE(HDRP(PREV_BLKP(bp))) + 
+        GET_SIZE(HDRP(NEXT_BLKP(bp)));              // 이전 block size + 현재 size + 다음 block size 모두 합산
+        PUT(HDRP(PREV_BLKP(bp)), PACK(size, 0));    // 가장 앞 block 자리에서 새 header 기록
+        PUT(FTRP(NEXT_BLKP(bp)), PACK(size, 0));    // 가장 뒤 block 끝자리에서 새 footer 기록
+        bp = PREV_BLKP(bp);                         // 최종 free block 시작점은 이전 block
+    }
+    
+    return bp;      // 최종적으로 합쳐진 free block의 payload 주소 반환
+}
+
 /*
  * mm_init - initialize the malloc package.
  */
