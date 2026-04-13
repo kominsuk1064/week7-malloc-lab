@@ -37,6 +37,26 @@ team_t team = {
 /* single word (4) or double word (8) alignment */
 #define ALIGNMENT 8
 
+
+#define WSIZE 4                 // header/footer 한 칸 크기
+#define DSIZE 8                 // 8바이트 기준 단위, header + footer = DSIZE
+#define CHUNKSIZE (1 << 12)     // heap 기본 확장 크기
+
+#define PACK(size, alloc) ((size) | (alloc))        // size와 alloc bit를 합쳐 header/footer 값 만들기
+
+#define GET(p) (*(unsigned int *)(p))                   // 주소 p에 있는 header/footer 값 읽기
+#define PUT(p, val) (*(unsigned int *)(p) = (val))      // 주소 p에 header/footer 값 쓰기
+
+#define GET_SIZE(p) (GET(p) & ~0x7)     // header/footer에서 크기만 꺼내기
+#define GET_ALLOC(p) (GET(p) & 0x1)     // header/footer에서 할당 여부만 꺼내기
+
+#define HDRP(bp) ((char *)(bp) - WSIZE)                             // 현재 block의 header 주소 찾기
+#define FTRP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)) - DSIZE)        // 현재 block의 footer 주소 찾기
+
+#define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)))                   // 다음 block의 payload 시작 주소
+#define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE))       // 이전 block의 payload 시작 주소
+
+
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~0x7)
 
