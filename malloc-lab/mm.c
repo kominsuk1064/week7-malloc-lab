@@ -125,6 +125,24 @@ static void *find_fit(size_t asize)
     return NULL;        // heap 끝까지 갔는데도 맞는 free block이 없으면 실패
 }
 
+static void place(void *bp, size_t asize)
+{
+    size_t csize = GET_SIZE(HDRP(bp));          // 현재 free block의 전체 크기를 읽어서 csize에 저장
+
+    if ((csize - asize) >= (2 * DSIZE)) {       // 현재 free block에서 요청 크기만큼 쓰고 남는 공간이 최소 block 크기 이상이면 split
+        PUT(HDRP(bp), PACK(asize, 1));          // 현재 free block의 앞부분을 크기 asize, allocated 상태로 바꿈
+        PUT(FTRP(bp), PACK(asize, 1));
+
+        bp = NEXT_BLKP(bp);                     // 방금 배치한 allocated block 다음으로 이동, 그 뒤 남는 공간을 새 free block으로 기록
+        PUT(HDRP(bp), PACK(csize - asize, 0));
+        PUT(FTRP(bp), PACK(csize - asize, 0));
+    }
+    else {                                      // 남는 공간이 너무 작으면 쪼개지 말고 block 전체를 allocated
+        PUT(HDRP(bp), PACK(csize, 1));
+        PUT(FTRP(bp), PACK(csize, 1));
+    }
+}
+
 /*
  * mm_init - initialize the malloc package.
  */
