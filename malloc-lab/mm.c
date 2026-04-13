@@ -63,8 +63,23 @@ team_t team = {
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
 
-static char *heap_listp;                    // 힙 탐색 시작 기준 포인터
-static void *extend_heap(size_t words);     // 힙 늘리는 helper 함수
+static char *heap_listp;        // 힙 탐색 시작 기준 포인터
+static void *extend_heap(size_t words)
+{
+    char *bp;           // 새로 확보한 free block의 payload 시작 주소를 담을 포인터
+    size_t size;        // 실제로 heap을 얼마나 늘릴지 저장하는 변수
+
+    size = (words % 2) ? (words + 1) * WSIZE : words * WSIZE;       // heap 확장 크기도 8바이트 정렬에 맞추기
+
+    if ((long)(bp = mem_sbrk(size)) == -1)      // size 만큼 heap 늘리기, 성공하면 새로 늘어난 공간 시작 주소를 bp에 저장
+        return NULL;
+
+    PUT(HDRP(bp), PACK(size, 0));               // 새 공간은 일단 free block
+    PUT(FTRP(bp), PACK(size, 0));               // 같은 정보를 footer에도 기록
+    PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));       // 새로운 heap 끝에 epilogue 다시 세우기
+
+    return coalesce(bp);        // 새 free block 만들기, 필요하면 앞쪽 free block과 합치기, 최종 free block 포인터 반환
+}
 
 /*
  * mm_init - initialize the malloc package.
