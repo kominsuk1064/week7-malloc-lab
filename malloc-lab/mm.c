@@ -62,11 +62,28 @@ team_t team = {
 
 #define SIZE_T_SIZE (ALIGN(sizeof(size_t)))
 
+
+static char *heap_listp;                    // 힙 탐색 시작 기준 포인터
+static void *extend_heap(size_t words);     // 힙 늘리는 helper 함수
+
 /*
  * mm_init - initialize the malloc package.
  */
 int mm_init(void)
 {
+    if ((heap_listp = mem_sbrk(4 * WSIZE)) == (void *)-1)       // 힙에서 16바이트 확보
+        return -1;
+
+    PUT(heap_listp, 0);                                 // 첫 칸은 padding
+    PUT(heap_listp + (1 * WSIZE), PACK(DSIZE, 1));      // prologue header
+    PUT(heap_listp + (2 * WSIZE), PACK(DSIZE, 1));      // prologue footer
+    PUT(heap_listp + (3 * WSIZE), PACK(0, 1));          // epilogue header
+
+    heap_listp += (2 * WSIZE);      // heap_listp를 실제 탐색하기 위한 위치 조정
+
+    if (extend_heap(CHUNKSIZE / WSIZE) == NULL)     // heap을 늘려서 첫 free block 만들기
+        return -1;
+
     return 0;
 }
 
