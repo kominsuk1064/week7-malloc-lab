@@ -112,6 +112,19 @@ static void *coalesce(void *bp)
     return bp;      // 최종적으로 합쳐진 free block의 payload 주소 반환
 }
 
+static void *find_fit(size_t asize)
+{
+    void *bp;       // heap을 순회하면서 각 block의 payload 시작 주소를 가리킬 포인터
+
+    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp)) {     // heap 탐색을 heap_listp부터 시작, 현재 block size가 0보다 큰 동안 반복, 현재 block 끝나면 다음 block payload로 이동
+        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) {        // 현재 block이 free이고, 요청 크기를 다음 만큼 크면 할당 가능
+            return bp;      // first fit 방식이므로 처음으로 맞는 block 찾자마자 바로 변환
+        }
+    }
+
+    return NULL;        // heap 끝까지 갔는데도 맞는 free block이 없으면 실패
+}
+
 /*
  * mm_init - initialize the malloc package.
  */
