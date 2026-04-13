@@ -26,9 +26,9 @@ team_t team = {
     /* Team name */
     "ateam",
     /* First member's full name */
-    "Harry Bovik",
+    "Minsuk Ko",
     /* First member's email address */
-    "bovik@cs.cmu.edu",
+    "kms106418@cs.cmu.edu",
     /* Second member's full name (leave blank if none) */
     "",
     /* Second member's email address (leave blank if none) */
@@ -56,6 +56,7 @@ team_t team = {
 #define NEXT_BLKP(bp) ((char *)(bp) + GET_SIZE(HDRP(bp)))                   // 다음 block의 payload 시작 주소
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE))       // 이전 block의 payload 시작 주소
 
+#define MAX(x, y) ((x) > (y) ? (x) : (y))       // 요청 크기와 기본 확장 크기 중 더 큰 값 선택할 때 사용
 
 /* rounds up to the nearest multiple of ALIGNMENT */
 #define ALIGN(size) (((size) + (ALIGNMENT - 1)) & ~0x7)
@@ -64,6 +65,12 @@ team_t team = {
 
 
 static char *heap_listp;        // 힙 탐색 시작 기준 포인터
+
+static void *extend_heap(size_t words);         // heap을 늘려 새 free block을 만드는 함수
+static void *coalesce(void *bp);                // 인접한 free block들을 합치는 함수
+static void *find_fit(size_t asize);            // 요청 크기를 만족하는 free block을 찾는 함수
+static void place(void *bp, size_t asize);      // 찾은 free bloc에 요청 block을 배치하는 함수
+
 static void *extend_heap(size_t words)
 {
     char *bp;           // 새로 확보한 free block의 payload 시작 주소를 담을 포인터
@@ -203,7 +210,7 @@ void mm_free(void *bp)
     size_t size = GET_SIZE(HDRP(bp));       // 현재 block의 전체 크기 읽기
 
     PUT(HDRP(bp), PACK(size, 0));           // 현재 block의 header를 크기 : size, alloc bit : 0으로 다시 쓰기
-    PUT(HDRP(bp), PACK(size, 0));           // 같은 정보도 footer에 쓰기
+    PUT(FTRP(bp), PACK(size, 0));           // 같은 정보도 footer에 쓰기
     coalesce(bp);                           // 현재 block을 free로 바꿨으니 앞뒤 block도 free인지 보고 합칠 수 있으면 합치기
 }
 
