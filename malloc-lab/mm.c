@@ -198,8 +198,13 @@ void *mm_malloc(size_t size)
 /*
  * mm_free - Freeing a block does nothing.
  */
-void mm_free(void *ptr)
+void mm_free(void *bp)
 {
+    size_t size = GET_SIZE(HDRP(bp));       // 현재 block의 전체 크기 읽기
+
+    PUT(HDRP(bp), PACK(size, 0));           // 현재 block의 header를 크기 : size, alloc bit : 0으로 다시 쓰기
+    PUT(HDRP(bp), PACK(size, 0));           // 같은 정보도 footer에 쓰기
+    coalesce(bp);                           // 현재 block을 free로 바꿨으니 앞뒤 block도 free인지 보고 합칠 수 있으면 합치기
 }
 
 /*
