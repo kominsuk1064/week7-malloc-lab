@@ -212,17 +212,23 @@ void mm_free(void *bp)
  */
 void *mm_realloc(void *ptr, size_t size)
 {
-    void *oldptr = ptr;
-    void *newptr;
-    size_t copySize;
+    if (ptr == NULL)        // realloc(NULL, size)는 malloc(size)와 같음
+        return mm_malloc(size);
 
-    newptr = mm_malloc(size);
-    if (newptr == NULL)
+    if (size == 0) {        // 크기를 0으로 줄이라는 요청이면 그냥 free하고 NULL 반환
+        mm_free(ptr);
         return NULL;
-    copySize = *(size_t *)((char *)oldptr - SIZE_T_SIZE);
-    if (size < copySize)
-        copySize = size;
-    memcpy(newptr, oldptr, copySize);
-    mm_free(oldptr);
-    return newptr;
+    }
+
+    void *newptr = mm_malloc(size);     // 새 크기에 맞는 block을 하나 새로 받기
+    if (newptr == NULL)                 // 실패하면 더 할 수 있는 게 없으니 NULL
+        return NULL;
+
+    size_t oldsize = GET_SIZE(HDRP(ptr)) - DSIZE;           // 현재 old block의 전체 크기 읽어서 payload 크기 보기
+    size_t copysize = size < oldsize ? size : oldsize;      // 새 요청 크기와 이전 payload 크기 중 더 작은 값만큼만 복사
+
+    memcpy(newptr, ptr, copysize);      // old payload 내용을 new payload로 copysize 만큼 복사
+    mm_free(ptr);                       // old block free해서 다시 재사용 가능하게 돌려놓기
+
+    return newptr;      // 이제부터 사용자는 새 block 사용
 }
