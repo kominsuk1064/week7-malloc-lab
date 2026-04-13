@@ -170,15 +170,29 @@ int mm_init(void)
  */
 void *mm_malloc(size_t size)
 {
-    int newsize = ALIGN(size + SIZE_T_SIZE);
-    void *p = mem_sbrk(newsize);
-    if (p == (void *)-1)
+    size_t asize;           // 실제 block 크기
+    size_t extendsize;      // heap을 얼마나 늘릴지
+    char *bp;               // 찾거나 새로 만든 block의 payload 주소
+
+    if (size == 0)          // 사용자가 0바이트 요청하면 그냥 NULL
         return NULL;
+
+    if (size <= DSIZE)      // 너무 작은 요청은 최소 block 크기로 처리
+        asize = 2 * DSIZE;
     else
-    {
-        *(size_t *)p = size;
-        return (void *)((char *)p + SIZE_T_SIZE);
+        asize = DSIZE * ((size + DSIZE + (DSIZE - 1)) / DSIZE);     // payload + 관리 정보까지 포함해서, 8바이트 정렬된 실제 block 크기 만들기
+
+    if ((bp = find_fit(asize)) != NULL) {       // find_fit으로 자리찾기
+        place(bp, asize);                       // place로 자리 확정하기
+        return bp;
     }
+
+    extendsize = MAX(asize, CHUNKSIZE);     // 요청 크기와 기본 확장 크기 중 더 큰 걸 heap 확장 크기로 쓰자
+    if ((bp = extend_heap(extendsize / WSIZE)) == NULL)     // extend_heap 호출해서 새 free block 만들기, 실패하면 NULL
+        return NULL;
+
+    place(bp, asize);       // 방금 확장해서 얻은 free block에 실제 요청 block 배치, 그 payload 주소 반환
+    return bp;
 }
 
 /*
