@@ -87,7 +87,11 @@ static void *find_fit(size_t asize);
 // 요청 크기를 만족하는 free block을 찾는 함수
 static void place(void *bp, size_t asize);
 
-
+/*
+ * heap을 늘려 새 free block을 만드는 함수
+ * words: 몇 워드(word)만큼 heap을 늘릴지 나타내는 값
+ * return: 새로 만들어진 free block(또는 coalesce 후 block)의 payload 포인터, 실패 시 NULL
+ */
 static void *extend_heap(size_t words)
 {
     // 새로 확보한 free block의 payload 시작 주소를 담을 포인터
@@ -113,6 +117,11 @@ static void *extend_heap(size_t words)
     return coalesce(bp);
 }
 
+/*
+ * 인접한 free block들을 합치는 함수
+ * bp: 현재 free 상태인 block의 payload 시작 주소
+ * return: 합쳐진 뒤 최종 free block의 payload 포인터
+ */
 static void *coalesce(void *bp)
 {
     // 이전 block footer에서 alloc 상태 확인
@@ -174,6 +183,11 @@ static void *coalesce(void *bp)
     return bp;
 }
 
+/*
+ * 요청 크기를 만족하는 free block을 찾는 함수
+ * asize: header/footer와 정렬을 포함한 실제 요청 block 크기
+ * return: 조건에 맞는 free block의 payload 포인터, 없으면 NULL
+ */
 static void *find_fit(size_t asize)
 {
     // heap을 순회하면서 각 block의 payload 시작 주소를 가리킬 포인터
@@ -194,6 +208,12 @@ static void *find_fit(size_t asize)
     return NULL;
 }
 
+/*
+ * 요청 크기를 만족하는 free block을 찾는 함수
+ * bp: 배치할 대상 free block의 payload 시작 주소
+ * asize: 실제로 배치할 block 크기
+ * return: 반환값 없음
+ */
 static void place(void *bp, size_t asize)
 {
     // 현재 free block의 전체 크기를 읽어서 csize에 저장
@@ -221,7 +241,10 @@ static void place(void *bp, size_t asize)
     }
 }
 
-
+/*
+ * 힙의 초기 구조를 세팅
+ * return: 성공하면 0, 실패하면 -1
+ */
 int mm_init(void)
 {
     // 힙에서 16바이트 확보
@@ -249,7 +272,11 @@ int mm_init(void)
     return 0;
 }
 
-
+/*
+ * 요청 크기만큼 메모리 block을 할당
+ * size: 사용자가 요청한 payload 크기(byte 단위)
+ * return: 할당된 block의 payload 포인터, 실패 시 NULL
+ */
 void *mm_malloc(size_t size)
 {
     // 실제 block 크기
@@ -293,7 +320,10 @@ void *mm_malloc(size_t size)
     return bp;
 }
 
-
+/*
+ * 할당된 block을 free 상태로 바꾸고 필요하면 coalesce
+ * bp: free할 block의 payload 시작 주소
+ */
 void mm_free(void *bp)
 {
     // 현재 block의 전체 크기 읽기
@@ -308,7 +338,12 @@ void mm_free(void *bp)
     coalesce(bp);
 }
 
-
+/*
+ * 기존 block의 크기를 조정
+ * ptr: 기존에 할당받아 사용 중인 block의 payload 시작 주소
+ * size: 새로 요청하는 payload 크기(byte 단위)
+ * return: 크기 조정 후 사용할 새 payload 포인터, 실패 시 NULL
+ */
 void *mm_realloc(void *ptr, size_t size)
 {
     // realloc(NULL, size)는 malloc(size)와 같음
