@@ -129,9 +129,9 @@ static void *extend_heap(size_t words)
 }
 
 /*
- * 인접한 free block들을 합치는 함수
+ * 현재 free block과 인접한 free block들을 합친 뒤,
+ * 최종 free block을 explicit free list에 넣고 그 payload 포인터 반환
  * bp: 현재 free 상태인 block의 payload 시작 주소
- * return: 합쳐진 뒤 최종 free block의 payload 포인터
  */
 static void *coalesce(void *bp)
 {
@@ -143,14 +143,19 @@ static void *coalesce(void *bp)
     size_t size = GET_SIZE(HDRP(bp));
 
     // 앞 alloc, 뒤 alloc
-    if (prev_alloc && next_alloc)
-    { 
+    if (prev_alloc && next_alloc) 
+    {
+        // free list에 등록
+        insert_free_block(bp);
         return bp;
     }
 
     // 앞 alloc, 뒤 free
     else if (prev_alloc && !next_alloc)
-    {                                      
+    {
+        // 다음 free block은 free list에서 제거
+        remove_free_block(NEXT_BLKP(bp));
+
         // 다음 block size를 현재 size에 더하기    
         size += GET_SIZE(HDRP(NEXT_BLKP(bp)));
 
@@ -163,6 +168,9 @@ static void *coalesce(void *bp)
     // 앞 free, 뒤 alloc
     else if (!prev_alloc && next_alloc)
     {
+        // 이전 free block은 free list에서 제거
+        remove_free_block(PREV_BLKP(bp));
+
         // 이전 block size를 더함         
         size += GET_SIZE(HDRP(PREV_BLKP(bp)));
 
@@ -178,6 +186,10 @@ static void *coalesce(void *bp)
     // 앞 free, 뒤 free
     else
     {
+        // 앞, 뒤 free block 둘 다 free list에서 제거
+        remove_free_block(PREV_BLKP(bp));
+        remove_free_block(NEXT_BLKP(bp));
+
         // 이전 block size + 현재 size + 다음 block size 모두 합산
         size += GET_SIZE(HDRP(PREV_BLKP(bp))) + GET_SIZE(HDRP(NEXT_BLKP(bp)));
 
@@ -190,6 +202,7 @@ static void *coalesce(void *bp)
         bp = PREV_BLKP(bp);
     }
 
+    insert_free_block(bp);
     // 최종적으로 합쳐진 free block의 payload 주소 반환
     return bp;
 }
