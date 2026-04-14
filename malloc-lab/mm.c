@@ -346,6 +346,23 @@ void mm_free(void *bp)
  */
 void *mm_realloc(void *ptr, size_t size)
 {
+    // 정렬과 header/footer까지 포함한 실제 요청 block 크기
+    size_t asize;
+    // 현재 block의 전체 크기
+    size_t oldsize;
+    // 바로 뒤 block의 전체 크기
+    size_t nextsize;
+    // 현재 block과 다음 block을 합쳤을 때의 전체 크기
+    size_t total;
+    // fallback시 실제 복사할 크기
+    size_t copysize;
+    // 다음 block의 payload 주소
+    void *next_bp;
+    // split 후 남는 free block의 payload 주소
+    void *split_bp;
+    // 새로 할당받은 block의 payload 주소
+    void *newptr;
+
     // realloc(NULL, size)는 malloc(size)와 같음
     if (ptr == NULL) {  
         return mm_malloc(size);
@@ -358,18 +375,88 @@ void *mm_realloc(void *ptr, size_t size)
         return NULL;
     }
 
+    // asize = 할당기가 실제로 필요한 block 전체 크기
+    if (size <= DSIZE) {
+        asize = 2 * DSIZE;
+    }
+    else {
+        asize = DSIZE * ((size + DSIZE + (DSIZE - 1)) / DSIZE);
+    }
+
+    // 현재 block의 header에서 block 전체 크기 읽기
+    oldsize = GET_SIZE(HDRP(ptr));
+
+    // 지금 block 자체가 이미 새 요청 크기를 만족하면 새 block 만들 필요 X
+    if (oldsize >= asize)
+    {
+        // 쓰고 남는 공간이 크다면 split
+        if ((oldsize - asize) >= (2 * DSIZE))
+        {
+            // 현재 block의 크기를 asize로 줄이고 allocated 상태로 다시 기록
+            PUT(HDRP(ptr), PACK(asize, 1));
+            PUT(FTRP(ptr), PACK(asize, 1));
+
+            // 현재 block 뒤쪽에 남은 공간을 새 free block으로 만들기
+            // header/footer를 free 상태로 쓰고 필요하면 coalesce
+            split_bp = NEXT_BLKP(ptr);
+            PUT(HDRP(split_bp), PACK(oldsize - asize, 0));
+            PUT(FTRP(split_bp), PACK(oldsize - asize, 0));
+            coalesce(split_bp);
+        }
+        // 기존 ptr 그대로 사용
+        return ptr;
+    }
+
+    // 현재 block 바로 뒤에 있는 다음 block 찾기
+    next_bp = NEXT_BLKP(ptr);
+
+    // 다음 block이 free라면 현재 block과 합쳐서 제자리 확장이 가능한지 확인
+    if (!GET_ALLOC(HDRP(next_bp)))
+    {
+        // 다음 block 크기를 읽고, 현재 block과 합친 전체 크기 계산
+        nextsize = GET_SIZE(HDRP(next_bp));
+        total = oldsize + nextsize;
+
+        // 합친 크기가 새 요청 크기를 만족하면 새 block 할당 없이 현재 자리에서 해결 가능
+        if (total >= asize)
+        {
+            // 합치고 남는 공간이 충분히 크면 split해서 뒤쪽을 free block으로 남김
+            if ((total - asize) >= (2 * DSIZE))
+            {
+                // 현재 block은 실제로 필요한 크기만 쓰고 그 크기로 header/footer 맞추기
+                PUT(HDRP(ptr), PACK(asize, 1));
+                PUT(FTRP(ptr), PACK(asize, 1));
+
+                // 합친 전체 공간에서 남는 부분을 free block으로 만들기
+                split_bp = NEXT_BLKP(ptr);
+                PUT(HDRP(split_bp), PACK(total - asize, 0));
+                PUT(FTRP(split_bp), PACK(total - asize, 0));
+                coalesce(split_bp);
+            }
+            // 남는 공간이 너무 작으면 split하지 않고 합친 전체 block을 그대로 사용
+            else
+            {
+                PUT(HDRP(ptr), PACK(total, 1));
+                PUT(FTRP(ptr), PACK(total, 1));
+            }
+            // 기존 ptr 그대로 사용
+            return ptr;
+        }
+    }
+
     // 새 크기에 맞는 block을 하나 새로 받기
-    void *newptr = mm_malloc(size); 
+    newptr = mm_malloc(size); 
 
     // 실패하면 더 할 수 있는 게 없으니 NULL
-    if (newptr == NULL)             
+    if (newptr == NULL) {          
         return NULL;
+    }
 
-    // 기존 메모리 블록의 전체 크기에서 header와 footer 크기를 빼서, 실제 데이터가 들어 있던 payload 크기
-    // HDRP(ptr) = 현재 block의 header 주소
-    size_t oldsize = GET_SIZE(HDRP(ptr)) - DSIZE;
-    // 새 요청 크기와 이전 payload 크기 중 더 작은 값만큼만 복사
-    size_t copysize = size < oldsize ? size : oldsize; 
+    // old payload 크기 구하고 새 요청 크기보다 크면 새 요청 크기로 줄이기
+    copysize = oldsize - DSIZE;
+    if (size < copysize) {
+        copysize = size;
+    }
 
     // old payload 내용을 new payload로 copysize 만큼 복사
     memcpy(newptr, ptr, copysize); 
