@@ -328,8 +328,8 @@ int mm_init(void)
     // epilogue header
     PUT(heap_listp + (3 * WSIZE), PACK(0, 1));
 
-    // heap_listp를 실제 탐색하기 위한 위치 조정
-    heap_listp += (2 * WSIZE);
+    // explicit free list는 처음엔 비어 있는 상태
+    free_listp = NULL;
 
     // heap을 늘려서 첫 free block 만들기
     if (extend_heap(CHUNKSIZE / WSIZE) == NULL)
