@@ -254,8 +254,8 @@ static void place(void *bp, size_t asize)
 
         // split후 뒤쪽 공간을 free block으로 기록
         void *next_bp = NEXT_BLKP(bp);
-        PUT(HDRP(bp), PACK(csize - asize, 0));
-        PUT(FTRP(bp), PACK(csize - asize, 0));
+        PUT(HDRP(next_bp), PACK(csize - asize, 0));
+        PUT(FTRP(next_bp), PACK(csize - asize, 0));
 
         // remove한 free block대신 새로 남은 free block을 리스트에 다시 넣기
         insert_free_block(next_bp);
@@ -281,7 +281,7 @@ static void insert_free_block(void *bp)
     SUCC(bp) = free_listp;
 
     // 기존 첫 free block이 있었다면
-    if (free_listp != bp); {
+    if (free_listp != NULL) {
         // 그 block의 이전 노드를 새 block으로 바꿈
         PRED(free_listp) = bp;
     }
@@ -327,6 +327,8 @@ int mm_init(void)
     PUT(heap_listp + (2 * WSIZE), PACK(DSIZE, 1));
     // epilogue header
     PUT(heap_listp + (3 * WSIZE), PACK(0, 1));
+
+    heap_listp += (2 * WSIZE);
 
     // explicit free list는 처음엔 비어 있는 상태
     free_listp = NULL;
@@ -458,7 +460,7 @@ void *mm_realloc(void *ptr, size_t size)
     if (oldsize >= asize)
     {
         // 쓰고 남는 공간이 크다면 split
-        if ((oldsize - asize) >= (2 * DSIZE))
+        if ((oldsize - asize) >= MINBLOCKSIZE)
         {
             // 현재 block의 크기를 asize로 줄이고 allocated 상태로 다시 기록
             PUT(HDRP(ptr), PACK(asize, 1));
@@ -488,8 +490,10 @@ void *mm_realloc(void *ptr, size_t size)
         // 합친 크기가 새 요청 크기를 만족하면 새 block 할당 없이 현재 자리에서 해결 가능
         if (total >= asize)
         {
+            remove_free_block(next_bp);
+            
             // 합치고 남는 공간이 충분히 크면 split해서 뒤쪽을 free block으로 남김
-            if ((total - asize) >= (2 * DSIZE))
+            if ((total - asize) >= MINBLOCKSIZE)
             {
                 // 현재 block은 실제로 필요한 크기만 쓰고 그 크기로 header/footer 맞추기
                 PUT(HDRP(ptr), PACK(asize, 1));
