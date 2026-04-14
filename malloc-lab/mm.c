@@ -124,7 +124,7 @@ static void *extend_heap(size_t words)
     // 새로운 heap 끝에 epilogue 다시 세우기
     PUT(HDRP(NEXT_BLKP(bp)), PACK(0, 1));
 
-    // 새 free block 만들기, 필요하면 앞쪽 free block과 합치기, 최종 free block 포인터 반환
+    // 병합 하고, free list에서 remove/insert도 하고 최종 free block 반환
     return coalesce(bp);
 }
 
@@ -208,7 +208,7 @@ static void *coalesce(void *bp)
 }
 
 /*
- * 요청 크기를 만족하는 free block을 찾는 함수
+ * 요청 크기를 만족하는 free block을 explicit free list에서 찾는 함수
  * asize: header/footer와 정렬을 포함한 실제 요청 block 크기
  * return: 조건에 맞는 free block의 payload 포인터, 없으면 NULL
  */
@@ -217,11 +217,11 @@ static void *find_fit(size_t asize)
     // heap을 순회하면서 각 block의 payload 시작 주소를 가리킬 포인터
     void *bp;
 
-    // heap 탐색을 heap_listp부터 시작, 현재 block size가 0보다 큰 동안 반복, 현재 block 끝나면 다음 block payload로 이동
-    for (bp = heap_listp; GET_SIZE(HDRP(bp)) > 0; bp = NEXT_BLKP(bp))
+    // 빈 block 목록만 순회, 다음 free block이 없으면 끝, SUCC(bp)를 타고 리스트 따라가기
+    for (bp = free_listp; bp != NULL; bp = SUCC(bp))
     {
-        // 현재 block이 free이고, 요청 크기를 다음 만큼 크면 할당 가능 
-        if (!GET_ALLOC(HDRP(bp)) && (asize <= GET_SIZE(HDRP(bp)))) 
+        // 요청 크기가 다음 만큼 크면 할당 가능 
+        if (GET_SIZE(HDRP(bp)) >= asize)
         {
             // first fit 방식이므로 처음으로 맞는 block 찾자마자 바로 변환   
             return bp;
@@ -233,28 +233,32 @@ static void *find_fit(size_t asize)
 }
 
 /*
- * 요청 크기를 만족하는 free block을 찾는 함수
+ * free block에 요청 block을 배치하고 필요하면 split
  * bp: 배치할 대상 free block의 payload 시작 주소
  * asize: 실제로 배치할 block 크기
- * return: 반환값 없음
  */
 static void place(void *bp, size_t asize)
 {
     // 현재 free block의 전체 크기를 읽어서 csize에 저장
     size_t csize = GET_SIZE(HDRP(bp));
 
-    // 현재 free block에서 요청 크기만큼 쓰고 남는 공간이 최소 block 크기 이상이면 split
-    if ((csize - asize) >= (2 * DSIZE))
+    // 현재 free block은 이제 사용된 것이므로 free list에서 제거
+    remove_free_block(bp);
+
+    // 남는 공간이 새 free block이 될 만큼 크면 split
+    if ((csize - asize) >= MINBLOCKSIZE)
     {
         // 현재 free block의 앞부분을 크기 asize, allocated 상태로 바꿈                
         PUT(HDRP(bp), PACK(asize, 1));
         PUT(FTRP(bp), PACK(asize, 1));
 
-        // 방금 배치한 allocated block 다음으로 이동, 그 뒤 남는 공간을 새 free block으로 기록
-        bp = NEXT_BLKP(bp);
-
+        // split후 뒤쪽 공간을 free block으로 기록
+        void *next_bp = NEXT_BLKP(bp);
         PUT(HDRP(bp), PACK(csize - asize, 0));
         PUT(FTRP(bp), PACK(csize - asize, 0));
+
+        // remove한 free block대신 새로 남은 free block을 리스트에 다시 넣기
+        insert_free_block(next_bp);
     }
 
     // 남는 공간이 너무 작으면 쪼개지 말고 block 전체를 allocated
