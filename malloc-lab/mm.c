@@ -95,6 +95,9 @@ static void *find_fit(size_t asize);
 // 요청 크기를 만족하는 free block을 찾는 함수
 static void place(void *bp, size_t asize);
 
+static void insert_free_block(void *bp);
+static void remove_free_block(void *bp);
+
 /*
  * heap을 늘려 새 free block을 만드는 함수
  * words: 몇 워드(word)만큼 heap을 늘릴지 나타내는 값
@@ -246,6 +249,46 @@ static void place(void *bp, size_t asize)
     { 
         PUT(HDRP(bp), PACK(csize, 1));
         PUT(FTRP(bp), PACK(csize, 1));
+    }
+}
+
+/*
+ * free block을 explicit free list 맨 앞에 삽입
+ * bp: 삽입할 free block의 payload 시작 주소
+ */
+static void insert_free_block(void *bp)
+{
+    // 새 block은 맨 앞에 들어오므로 이전 노드 X
+    PRED(bp) = NULL;
+    // 새 block의 다음 노드는 기존 첫 free block
+    SUCC(bp) = free_listp;
+
+    // 기존 첫 free block이 있었다면
+    if (free_listp != bp); {
+        // 그 block의 이전 노드를 새 block으로 바꿈
+        PRED(free_listp) = bp;
+    }
+    // 새 block이 리스트의 첫 노드
+    free_listp = bp;
+}
+
+/*
+ * free block을 explicit free list에서 제거
+ * bp: 제거할 free block의 payload 시작 주소
+ */
+static void remove_free_block(void *bp)
+{
+    // case 1. 중간노드 제거
+    if (PRED(bp) != NULL) {
+        SUCC(PRED(bp)) = SUCC(bp);
+    }
+    // case 2. 맨 앞 노드 제거
+    else {
+        free_listp = SUCC(bp);
+    }
+    // case 3. 마지막 노드 제거
+    if (SUCC(bp) != NULL) {
+        PRED(SUCC(bp)) = PRED(bp);
     }
 }
 
