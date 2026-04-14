@@ -70,13 +70,21 @@ team_t team = {
 // 이전 block의 payload 시작 주소
 #define PREV_BLKP(bp) ((char *)(bp) - GET_SIZE((char *)(bp) - DSIZE))
 
-
 // 요청 크기와 기본 확장 크기 중 더 큰 값 선택할 때 사용
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
+
+// 이 free block의 이전 free block 주소가 들어있는 칸
+#define PRED(bp) (*(void **)(bp))
+// 이 free block의 다음 free block 주소가 들어있는 칸
+#define SUCC(bp) (*(void **)((char *)(bp) + DSIZE))
+// DSIZE + pred(8바이트) + succ(8바이트)
+#define MINBLOCKSIZE (3 * DSIZE)
 
 
 // 힙 탐색 시작 기준 포인터
 static char *heap_listp;
+// free block 연결리스트의 시작 포인터
+static void *free_listp;
 
 // heap을 늘려 새 free block을 만드는 함수
 static void *extend_heap(size_t words);
